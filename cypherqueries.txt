@@ -1,0 +1,99 @@
+// -------- MEVCUT VERİLERİ VE KISITLAMALARI TEMİZLEME --------
+
+// Önce ilişkileri olan düğümleri silmek için (DETACH DELETE)
+MATCH (i:Ingredient) DETACH DELETE i;
+MATCH (f:Flavor) DETACH DELETE f;
+MATCH (t:Technique) DETACH DELETE t;
+MATCH (r:Recipe) DETACH DELETE r;
+
+// Mevcut kısıtlamaları kaldır (varsa)
+DROP CONSTRAINT Ingredient_id IF EXISTS;
+DROP CONSTRAINT Flavor_id IF EXISTS;
+DROP CONSTRAINT Technique_id IF EXISTS;
+DROP CONSTRAINT Recipe_id IF EXISTS;
+
+// -------- YENİ KISITLAMALARI OLUŞTURMA --------
+// Her düğüm tipi için benzersiz ID kısıtlaması
+
+CREATE CONSTRAINT Ingredient_id IF NOT EXISTS
+FOR (x:Ingredient)
+REQUIRE x.id IS UNIQUE;
+
+CREATE CONSTRAINT Flavor_id IF NOT EXISTS
+FOR (x:Flavor)
+REQUIRE x.id IS UNIQUE;
+
+CREATE CONSTRAINT Technique_id IF NOT EXISTS
+FOR (x:Technique)
+REQUIRE x.id IS UNIQUE;
+
+CREATE CONSTRAINT Recipe_id IF NOT EXISTS
+FOR (x:Recipe)
+REQUIRE x.id IS UNIQUE;
+
+// -------- DÜĞÜMLERİ YÜKLEME --------
+
+// Malzemeleri Yükle (ingredients.csv)
+LOAD CSV WITH HEADERS
+FROM 'YOUR_BASE_URL/ingredients.csv' AS row
+MERGE (i:Ingredient {id: row.id})
+SET
+  i.name = row.name,
+  i.category = row.category;
+
+// Lezzetleri Yükle (flavors.csv)
+LOAD CSV WITH HEADERS
+FROM 'YOUR_BASE_URL/flavors.csv' AS row
+MERGE (f:Flavor {id: row.id})
+SET
+  f.name = row.name;
+
+// Teknikleri Yükle (techniques.csv)
+LOAD CSV WITH HEADERS
+FROM 'YOUR_BASE_URL/techniques.csv' AS row
+MERGE (t:Technique {id: row.id})
+SET
+  t.name = row.name;
+
+// Tarifleri Yükle (recipes.csv)
+LOAD CSV WITH HEADERS
+FROM 'YOUR_BASE_URL/recipes.csv' AS row
+MERGE (r:Recipe {id: row.id})
+SET
+  r.name = row.name,
+  r.difficulty = row.difficulty,
+  r.time_minutes = toFloat(row.time_minutes); // CSV'de 45.0 gibi ondalıklıysa toFloat, tam sayı ise toInteger
+
+// -------- İLİŞKİLERİ YÜKLEME --------
+
+// CONTAINS İlişkilerini Yükle (Recipe -> Ingredient) (contains_relationships.csv)
+LOAD CSV WITH HEADERS
+FROM 'YOUR_BASE_URL/contains_relationships.csv' AS row
+MATCH (recipe:Recipe {id: row.start_node})
+MATCH (ingredient:Ingredient {id: row.end_node})
+MERGE (recipe)-[:CONTAINS]->(ingredient);
+
+// HAS_FLAVOR İlişkilerini Yükle (Recipe -> Flavor) (has_flavor_relationships.csv)
+LOAD CSV WITH HEADERS
+FROM 'YOUR_BASE_URL/has_flavor_relationships.csv' AS row
+MATCH (recipe:Recipe {id: row.start_node})
+MATCH (flavor:Flavor {id: row.end_node})
+MERGE (recipe)-[:HAS_FLAVOR]->(flavor);
+
+// USES_TECHNIQUE İlişkilerini Yükle (Recipe -> Technique) (uses_technique_relationships.csv)
+LOAD CSV WITH HEADERS
+FROM 'YOUR_BASE_URL/uses_technique_relationships.csv' AS row
+MATCH (recipe:Recipe {id: row.start_node})
+MATCH (technique:Technique {id: row.end_node})
+MERGE (recipe)-[:USES_TECHNIQUE]->(technique);
+
+// CAN_REPLACE İlişkilerini Yükle (Ingredient -> Ingredient) (can_replace_relationships.csv)
+LOAD CSV WITH HEADERS
+FROM 'YOUR_BASE_URL/can_replace_relationships.csv' AS row
+MATCH (ingredient1:Ingredient {id: row.start_node})
+MATCH (ingredient2:Ingredient {id: row.end_node})
+MERGE (ingredient1)-[:CAN_REPLACE]->(ingredient2);
+
+// -------- İŞLEM TAMAMLANDI MESAJI (Opsiyonel) --------
+// Yükleme işleminin bittiğini teyit etmek için basit bir çıktı
+RETURN "Veri yükleme tamamlandı!" AS message;
