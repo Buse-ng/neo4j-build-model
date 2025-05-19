@@ -1,11 +1,14 @@
-// -------- MEVCUT VERİLERİ VE KISITLAMALARI TEMİZLEME --------
+//Tüm düğümleri ve ilişkilerini silmek için
+MATCH (n) DETACH DELETE n;
 
-// Önce ilişkileri olan tüm düğümleri silmek için (DETACH DELETE)
-MATCH (i) DETACH DELETE i;
+// Mevcut kısıtlamalar varsa kaldırmak için
+DROP CONSTRAINT Ingredient_id IF EXISTS;
+DROP CONSTRAINT Flavor_id IF EXISTS;
+DROP CONSTRAINT Technique_id IF EXISTS;
+DROP CONSTRAINT Recipe_id IF EXISTS;
 
-
-// -------- YENİ KISITLAMALARI OLUŞTURMA --------
-// Her düğüm tipi için benzersiz ID kısıtlaması
+// -------- YENİ KISITLAMALARI OLUŞTURMA KISMI --------
+// Her node tipi için unique id kısıtlaması
 
 CREATE CONSTRAINT Ingredient_id IF NOT EXISTS
 FOR (x:Ingredient)
@@ -23,9 +26,9 @@ CREATE CONSTRAINT Recipe_id IF NOT EXISTS
 FOR (x:Recipe)
 REQUIRE x.id IS UNIQUE;
 
-// -------- DÜĞÜMLERİ YÜKLEME --------
+// -------- NODE'LARI YÜKLEME KISMI --------
 
-// Malzemeleri Yükle (ingredients.csv)
+// Malzemeleri Yükleme 
 LOAD CSV WITH HEADERS
 FROM 'https://raw.githubusercontent.com/Buse-ng/neo4j-build-model/refs/heads/main/csvFiles/ingredients.csv' AS row
 MERGE (i:Ingredient {id: row.id})
@@ -33,56 +36,69 @@ SET
   i.name = row.name,
   i.category = row.category;
 
-// Lezzetleri Yükle (flavors.csv)
+// Lezzetleri Yükleme 
 LOAD CSV WITH HEADERS
 FROM 'https://raw.githubusercontent.com/Buse-ng/neo4j-build-model/refs/heads/main/csvFiles/flavors.csv' AS row
 MERGE (f:Flavor {id: row.id})
 SET
   f.name = row.name;
 
-// Teknikleri Yükle (techniques.csv)
+// Teknikleri Yükleme 
 LOAD CSV WITH HEADERS
 FROM 'https://raw.githubusercontent.com/Buse-ng/neo4j-build-model/refs/heads/main/csvFiles/techniques.csv' AS row
 MERGE (t:Technique {id: row.id})
 SET
   t.name = row.name;
 
-// Tarifleri Yükle (recipes.csv)
+// Tarifleri Yükleme 
 LOAD CSV WITH HEADERS
 FROM 'https://raw.githubusercontent.com/Buse-ng/neo4j-build-model/refs/heads/main/csvFiles/recipes.csv' AS row
 MERGE (r:Recipe {id: row.id})
 SET
   r.name = row.name,
   r.difficulty = row.difficulty,
-  r.time_minutes = toFloat(row.time_minutes); // CSV'de 45.0 gibi ondalıklıysa toFloat, tam sayı ise toInteger
+  r.time_minutes = toFloat(row.time_minutes);
 
-// -------- İLİŞKİLERİ YÜKLEME --------
 
-// CONTAINS İlişkilerini Yükle (Recipe -> Ingredient) (contains_relationships.csv)
+// -------- İLİŞKİLERİ YÜKLEME KISMI--------
+
+// CONTAINS İlişkilerini Yüklemek için (Recipe -> Ingredient)
 LOAD CSV WITH HEADERS
 FROM 'https://raw.githubusercontent.com/Buse-ng/neo4j-build-model/refs/heads/main/csvFiles/contains.csv' AS row
 MATCH (recipe:Recipe {id: row.start_node})
 MATCH (ingredient:Ingredient {id: row.end_node})
 MERGE (recipe)-[:CONTAINS]->(ingredient);
 
-// HAS_FLAVOR İlişkilerini Yükle (Recipe -> Flavor) (has_flavor_relationships.csv)
+// HAS_FLAVOR İlişkilerini Yüklemek için (Recipe -> Flavor)
 LOAD CSV WITH HEADERS
 FROM 'https://raw.githubusercontent.com/Buse-ng/neo4j-build-model/refs/heads/main/csvFiles/has_flavor.csv' AS row
 MATCH (recipe:Recipe {id: row.start_node})
 MATCH (flavor:Flavor {id: row.end_node})
 MERGE (recipe)-[:HAS_FLAVOR]->(flavor);
 
-// USES_TECHNIQUE İlişkilerini Yükle (Recipe -> Technique) (uses_technique_relationships.csv)
+// USES_TECHNIQUE İlişkilerini Yüklemek için (Recipe -> Technique)
 LOAD CSV WITH HEADERS
 FROM 'https://raw.githubusercontent.com/Buse-ng/neo4j-build-model/refs/heads/main/csvFiles/uses_technique.csv' AS row
 MATCH (recipe:Recipe {id: row.start_node})
 MATCH (technique:Technique {id: row.end_node})
 MERGE (recipe)-[:USES_TECHNIQUE]->(technique);
 
-// CAN_REPLACE İlişkilerini Yükle (Ingredient -> Ingredient) (can_replace_relationships.csv)
+// CAN_REPLACE İlişkilerini Yüklemek için (Ingredient -> Ingredient)
 LOAD CSV WITH HEADERS
 FROM 'https://raw.githubusercontent.com/Buse-ng/neo4j-build-model/refs/heads/main/csvFiles/can_replace.csv' AS row
 MATCH (ingredient1:Ingredient {id: row.start_node})
 MATCH (ingredient2:Ingredient {id: row.end_node})
 MERGE (ingredient1)-[:CAN_REPLACE]->(ingredient2);
 
+// ------ LABELS KISMI ------
+// Tatlı lezzetine sahip tariflere "SweetDish" etiketi ekledim
+MATCH (r:Recipe)-[:HAS_FLAVOR]->(f:Flavor {name: "Tatlı"})
+WITH DISTINCT r SET r:SweetDish;
+
+// Kremamsı lezzetine sahip tariflere "CreamyDish" etiketi ekledim
+MATCH (r:Recipe)-[:HAS_FLAVOR]->(f:Flavor {name: "Kremamsı"})
+WITH DISTINCT r SET r:CreamyDish;
+
+// Başka bir malzemenin yerine kullanılabilen malzemelere "Substitute" etiketi ekledim
+MATCH (i:Ingredient)-[:CAN_REPLACE]->()
+WITH DISTINCT i SET i:Substitute;
